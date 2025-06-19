@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+message PublicDealsV3Api {
+  string topic = 1;
+  string symbol = 3;
+  int64 timestamp = 6;
+  repeated DealItem deals = 301;
+}
+
+message DealItem {
+  DealDetail detail = 1;
+  string topic = 2;
+}
+
+message DealDetail {
+  string price = 1;
+  string quantity = 2;
+  int32 isBuyerMaker = 3;
+  int64 timestamp = 4;
+}

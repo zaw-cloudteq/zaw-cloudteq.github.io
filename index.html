@@ -1,223 +1,138 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>MEXC Spot WebSocket Stream</title>
+  <meta charset="UTF-8" />
+  <title>MEXC Protobuf WebSocket Example with Order Book</title>
+
+  <!-- Protobuf.js Runtime -->
+  <script src="https://cdn.jsdelivr.net/npm/protobufjs@6.11.2/dist/protobuf.min.js"></script>
+  <script type="text/javascript">
+    $protobuf = protobuf;
+  </script>
+  <!-- Your compiled proto -->
+  <script src="compiled4.js"></script>
+
+  <!-- jQuery -->
   <script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
+
   <style>
     body { font-family: Arial, sans-serif; margin: 20px; }
-    #output { 
-      margin-top: 20px;
-      font-family: monospace;
+    #output {
       white-space: pre-wrap;
-      max-height: 500px;
-      overflow-y: auto;
       border: 1px solid #ddd;
       padding: 10px;
+      max-height: 400px;
+      overflow-y: auto;
+      font-family: monospace;
       background: #f9f9f9;
     }
-    button { padding: 8px 16px; margin-right: 10px; }
-    .trade { margin-bottom: 8px; padding: 5px; border-radius: 3px; }
-    .buy { color: #0a0; background: #e6f7e6; }
-    .sell { color: #d00; background: #ffebee; }
-    .status { color: #06c; }
-    .error { color: #d9534f; }
-    .timestamp { color: #666; font-size: 0.9em; }
-    .trade-amount { font-weight: bold; }
   </style>
 </head>
 <body>
-  <h2>MEXC Spot Market Stream</h2>
+
+  <h2>MEXC Spot Market Stream (Protobuf Demo)</h2>
+
+  <label>Symbol: </label>
+  <input id="symbol" value="BTCUSDT" />
   
-  <div>
-    <label>Symbol: </label>
-    <input type="text" id="symbol" value="BTCUSDT">
-    <button id="connectBtn">Connect</button>
-    <button id="disconnectBtn" disabled>Disconnect</button>
-  </div>
-  
-  <div style="margin-top: 10px;">
-    <label>Stream Type: </label>
-    <select id="streamType">
-      <option value="spot@public.deals.v3.api">Trades</option>
-      <option value="spot@public.kline.v3.api">Kline</option>
-      <option value="spot@public.bookTicker.v3.api">Book Ticker</option>
-      <option value="spot@public.miniTicker.v3.api">Mini Ticker</option>
-    </select>
-    
-    <label style="margin-left: 15px;">Min Value (USDT): </label>
-    <input type="number" id="minValue" value="1000" min="0" step="1">
-  </div>
-  
+  <label>Stream: </label>
+  <select id="streamType">
+    <option value="spot@public.deals.v3.api.pb">Trades</option>
+  </select>
+
+  <button id="connectBtn">Connect</button>
+  <button id="disconnectBtn" disabled>Disconnect</button>
+
   <div id="output">Status: Disconnected</div>
 
   <script>
-    $(function() {
-      // Convert to class-based implementation
-      class MEXCStreamer {
-        constructor() {
-          this.ws = null;
-          this.interval = null;
-          this.symbol = 'BTCUSDT';
-          this.streamType = 'spot@public.deals.v3.api';
-          this.minValue = 1000;
-          
-          // Initialize UI bindings
-          $('#connectBtn').click(() => this.connect());
-          $('#disconnectBtn').click(() => this.disconnect());
-          $('#symbol').change(e => this.symbol = e.target.value.toUpperCase());
-          $('#streamType').change(e => this.streamType = e.target.value);
-          $('#minValue').change(e => this.minValue = parseFloat(e.target.value));
-        }
-        
-        connect() {
-          if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-            this.log('Already connected', 'status');
-            return;
-          }
-          
-          //this.ws = new WebSocket('wss://wbs.mexc.com/ws');
-	this.ws = new WebSocket('wss://wbs-api.mexc.com/ws');
+    $(function () {
 
-          this.ws.onopen = () => {
-            this.log('Connected to MEXC WebSocket', 'status');
-            this.subscribe();
-            this.startPing();
-            $('#connectBtn').prop('disabled', true);
-            $('#disconnectBtn').prop('disabled', false);
-          };
-          
-          this.ws.onmessage = (msg) => this.handleMessage(msg);
-          this.ws.onerror = (err) => this.log(`WebSocket error: ${err.message}`, 'error');
-          this.ws.onclose = () => {
-            this.log('Disconnected', 'status');
-            this.stopPing();
-            $('#connectBtn').prop('disabled', false);
-            $('#disconnectBtn').prop('disabled', true);
-          };
-        }
-        
-        disconnect() {
-          if (this.ws) {
-            this.ws.close();
-          }
-        }
-        
-        subscribe() {
-          if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
-          
-          const channel = `${this.streamType}@${this.symbol}`;
-          const msg = {
-            method: "SUBSCRIPTION",
-            params: [channel]
-          };
-          
-          this.ws.send(JSON.stringify(msg));
-          this.log(`Subscribed to: ${channel}`, 'status');
-        }
-        
-        startPing() {
-          this.interval = setInterval(() => {
-            if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-              this.ws.send(JSON.stringify({ method: "PING" }));
-            }
-          }, 30000);
-        }
-        
-        stopPing() {
-          if (this.interval) {
-            clearInterval(this.interval);
-            this.interval = null;
-          }
-        }
-        
-        handleMessage(msg) {
-          try {
-            const data = JSON.parse(msg.data);
-            
-            // Handle PONG response
-            if (data.method === "PING") {
-              return;
-            }
-            
-            // Handle subscription response
-            if (data.id && data.code === 0) {
-              this.log(`Subscription confirmed: ${JSON.stringify(data.result)}`, 'status');
-              return;
-            }
-            
-            // Handle trade data in the format:
-            // {"c":"spot@public.deals.v3.api@BTCUSDT","d":{"deals":[{"p":"105108.15","v":"0.00215122","S":1,"t":1750305670995}]},"s":"BTCUSDT","t":1750305671004}
-            if (data.c && data.c.startsWith('spot@public.deals.v3.api@') && data.d && data.d.deals) {
-              data.d.deals.forEach(deal => {
-                this.handleTrade({
-                  p: deal.p,
-                  v: deal.v,
-                  S: deal.S,
-                  t: deal.t
-                });
-              });
-              return;
-            }
-            
-            // Handle alternative trade format (if different structure comes through)
-            if (data.s && data.p && data.v) {
-              this.handleTrade({
-                p: data.p,
-                v: data.v,
-                S: data.S,
-                t: data.t
-              });
-              return;
-            }
-            
-            // Log unhandled messages for debugging
-            this.log('Unhandled message structure: ' + JSON.stringify(data));
-            
-          } catch (e) {
-            this.log('Error parsing message: ' + e.message, 'error');
-          }
-        }
-        
-        handleTrade(deal) {
-          // Convert string numbers to floats
-          const price = parseFloat(deal.p);
-          const volume = parseFloat(deal.v);
-          const value = price * volume;
-          
-          if (value < this.minValue) return;
-          
-          const timestamp = new Date(deal.t).toLocaleTimeString();
-          const side = deal.S === '1' ? 'buy' : 'sell';
-          const sideText = deal.S === '1' ? 'BUY' : 'SELL';
-          const formattedValue = value.toLocaleString('en-US', {
-            style: 'currency',
-            currency: 'USD',
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2
-          });
-          
-          const tradeHtml = `
-            <div class="trade ${side}">
-              <span class="timestamp">[${timestamp}]</span>
-              <strong>${sideText}</strong> | 
-              Price: <strong>$${price.toFixed(2)}</strong> | 
-              Volume: ${volume.toFixed(6)} | 
-              Value: <span class="trade-amount">${formattedValue}</span>
-            </div>
-          `;
-          
-          $('#output').prepend(tradeHtml);
-        }
-        
-        log(message, type = '') {
-          const className = type ? ` class="${type}"` : '';
-          $('#output').prepend(`<div${className}>${message}</div>`);
-        }
+      let ws = null;
+      let pingInterval = null;
+
+      function log(msg, type = '') {
+        const color = type === 'error' ? 'red' : type === 'status' ? 'blue' : 'black';
+        $('#output').prepend(`<div style="color:${color};">${msg}</div>`);
       }
-      
-      // Initialize the streamer
-      const streamer = new MEXCStreamer();
+
+      function connect() {
+        if (ws && ws.readyState === WebSocket.OPEN) return;
+
+        const symbol = $('#symbol').val().toUpperCase();
+        const stream = $('#streamType').val();
+        const channel = `${stream}@${symbol}`;
+        ws = new WebSocket('wss://wbs.mexc.com/ws');
+        ws.binaryType = 'arraybuffer';
+
+        ws.onopen = () => {
+          log('✅ Connected to MEXC WebSocket', 'status');
+          ws.send(JSON.stringify({ method: 'SUBSCRIPTION', params: [channel], id: 1 }));
+          $('#connectBtn').prop('disabled', true);
+          $('#disconnectBtn').prop('disabled', false);
+
+          pingInterval = setInterval(() => {
+            ws.send(JSON.stringify({ method: 'PING' }));
+          }, 30000);
+        };
+
+        ws.onmessage = (event) => {
+          const TradeApi = window.$root.PublicDealsV3Api;
+          if (typeof event.data === 'string') {
+            try {
+              const msg = JSON.parse(event.data);
+              if (msg.ping) ws.send(JSON.stringify({ pong: msg.ping }));
+              return;
+            } catch (e) {}
+          }
+
+          const buffer = new Uint8Array(event.data);
+          try {
+            if (stream.includes('deals')) {
+              console.log(protobuf);
+              console.log("protobuf");
+              const decoded = TradeApi.decode(buffer);
+              (decoded.deals || []).forEach(d => {
+                const det = d.detail || {};
+                const price = det.price instanceof Uint8Array ? new TextDecoder().decode(det.price) : det.price;
+                const qty = det.quantity instanceof Uint8Array ? new TextDecoder().decode(det.quantity) : det.quantity;
+                const side = det.isBuyerMaker === 1 ? 'SELL' : 'BUY';
+                const time = new Date(Number(det.timestamp) / 1000).toLocaleTimeString();
+                log(`[TRADE][${side}] ${price} × ${qty} @ ${time}`);
+              });
+            } else if (stream.includes('bookTicker')) {
+              const BookApi = $protobuf.PublicBookTickerV3Api;
+              const decoded = BookApi.decode(buffer);
+              const topBid = decoded.bids?.[0] || {};
+              const topAsk = decoded.asks?.[0] || {};
+              const bp = topBid.price instanceof Uint8Array ? new TextDecoder().decode(topBid.price) : topBid.price;
+              const bq = topBid.quantity instanceof Uint8Array ? new TextDecoder().decode(topBid.quantity) : topBid.quantity;
+              const ap = topAsk.price instanceof Uint8Array ? new TextDecoder().decode(topAsk.price) : topAsk.price;
+              const aq = topAsk.quantity instanceof Uint8Array ? new TextDecoder().decode(topAsk.quantity) : topAsk.quantity;
+              log(`[BOOK][${decoded.symbol}] 🟢 Bid: ${bp} × ${bq} 🔴 Ask: ${ap} × ${aq}`);
+            }
+          } catch (err) {
+            log('❌ Protobuf decode error: ' + err.message, 'error');
+          }
+        };
+
+        ws.onerror = err => log('❌ WebSocket error', 'error');
+        ws.onclose = () => {
+          log('🔌 Disconnected', 'status');
+          $('#connectBtn').prop('disabled', false);
+          $('#disconnectBtn').prop('disabled', true);
+          clearInterval(pingInterval);
+        };
+      }
+
+      function disconnect() {
+        if (ws) ws.close();
+      }
+
+      $('#connectBtn').click(connect);
+      $('#disconnectBtn').click(disconnect);
     });
   </script>
+
 </body>
 </html>

@@ -6,17 +6,26 @@
 
   <!-- Protobuf.js Runtime -->
   <script src="https://cdn.jsdelivr.net/npm/protobufjs@6.11.2/dist/protobuf.min.js"></script>
-  <script type="text/javascript">
-    $protobuf = protobuf;
+  <script>
+    // Make protobufjs available globally
+    window.$protobuf = protobuf;
   </script>
-  <!-- Your compiled proto -->
+
+  <!-- Your compiled proto files -->
   <script src="compiled4.js"></script>
+  <script src="compiled5.js"></script>
+  <script src="compiled6.js"></script>
+
+
 
   <!-- jQuery -->
   <script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
 
   <style>
-    body { font-family: Arial, sans-serif; margin: 20px; }
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+    }
     #output {
       white-space: pre-wrap;
       border: 1px solid #ddd;
@@ -32,24 +41,27 @@
 
   <h2>MEXC Spot Market Stream (Protobuf Demo)</h2>
 
-  <label>Symbol: </label>
+  <label for="symbol">Symbol:</label>
   <input id="symbol" value="BTCUSDT" />
-  
-  <label>Stream: </label>
+
+  <label for="streamType">Stream:</label>
   <select id="streamType">
     <option value="spot@public.deals.v3.api.pb">Trades</option>
-    <option value="spot@public.aggre.depth.v3.api.pb@100ms"> Orderbook(Delta) </option>
+    <option value="spot@public.aggre.depth.v3.api.pb@100ms">Orderbook (Delta 100ms)</option>
+    <option value="spot@public.limit.depth.v3.api.pb">Orderbook (Limit Depth 5)</option>
   </select>
-  <small>Orderbook Delta will send the snapshot at first, but subsequence data will be the delta</small>
+  <br/>
+  <small>Orderbook Delta sends a snapshot first, subsequent data are deltas.</small><br/>
+
+  Current URL: <span id="url"></span><br/>
 
   <button id="connectBtn">Connect</button>
   <button id="disconnectBtn" disabled>Disconnect</button>
-  <span id="url">wss://wbs-api.mexc.com/ws</span>
+
   <div id="output">Status: Disconnected</div>
 
   <script>
     $(function () {
-
       let ws = null;
       let pingInterval = null;
 
@@ -63,40 +75,71 @@
 
         const symbol = $('#symbol').val().toUpperCase();
         const stream = $('#streamType').val();
-        const channel = `${stream}@${symbol}`;
-        /*if(stream!="spot@public.limit.depth.v3.api.pb"){
-          channel = `${stream}@${symbol}@1`;
-        }*/
-        ws = new WebSocket($("#url").text());
+
+        // Define WebSocket endpoints
+        const endpoints = {
+          delta: "wss://wbs-api.mexc.com/ws",
+          deltaLimit: "wss://wbs-api.mexc.com/ws",
+          spot: "wss://wbs.mexc.com/ws"
+        };
+
+        let url = "";
+        let channel = "";
+
+        // Set URL and channel based on stream selection
+        if (stream === "spot@public.deals.v3.api.pb") {
+          url = endpoints.spot;
+          channel = `${stream}@${symbol}`;
+        } else if (stream === "spot@public.aggre.depth.v3.api.pb@100ms") {
+          url = endpoints.delta;
+          channel = `${stream}@${symbol}`;
+        } else if (stream === "spot@public.limit.depth.v3.api.pb") {
+          url = endpoints.deltaLimit;
+          channel = `${stream}@${symbol}@5`; // example depth 5
+        }
+
+        ws = new WebSocket(url);
         ws.binaryType = 'arraybuffer';
+
+        $("#url").text(url);
 
         ws.onopen = () => {
           log('✅ Connected to MEXC WebSocket', 'status');
-          ws.send(JSON.stringify({ method: 'SUBSCRIPTION', params: [channel], id: 1 }));
+          const subscriptionMsg = JSON.stringify({
+            method: 'SUBSCRIPTION',
+            params: [channel],
+            id: 1
+          });
+          ws.send(subscriptionMsg);
+
           $('#connectBtn').prop('disabled', true);
           $('#disconnectBtn').prop('disabled', false);
 
+          // Keep connection alive with ping every 30 seconds
           pingInterval = setInterval(() => {
             ws.send(JSON.stringify({ method: 'PING' }));
           }, 30000);
         };
 
         ws.onmessage = (event) => {
-          const TradeApi = window.$root.PublicDealsV3Api;
           if (typeof event.data === 'string') {
             try {
               const msg = JSON.parse(event.data);
-              if (msg.ping) ws.send(JSON.stringify({ pong: msg.ping }));
-              return;
-            } catch (e) {}
+              if (msg.ping) {
+                ws.send(JSON.stringify({ pong: msg.ping }));
+                return;
+              }
+            } catch (e) {
+              // Not JSON message, proceed
+            }
           }
 
           const buffer = new Uint8Array(event.data);
           try {
             if (stream.includes('deals')) {
-              console.log(protobuf);
-              console.log("protobuf");
+              const TradeApi = window.$root.PublicDealsV3Api;
               const decoded = TradeApi.decode(buffer);
+
               (decoded.deals || []).forEach(d => {
                 const det = d.detail || {};
                 const price = det.price instanceof Uint8Array ? new TextDecoder().decode(det.price) : det.price;
@@ -105,23 +148,91 @@
                 const time = new Date(Number(det.timestamp) / 1000).toLocaleTimeString();
                 log(`[TRADE][${side}] ${price} × ${qty} @ ${time}`);
               });
+
             } else if (stream.includes('bookTicker')) {
-              const BookApi = $protobuf.PublicBookTickerV3Api;
+              const BookApi = window.$protobuf.PublicBookTickerV3Api;
               const decoded = BookApi.decode(buffer);
               const topBid = decoded.bids?.[0] || {};
               const topAsk = decoded.asks?.[0] || {};
+
               const bp = topBid.price instanceof Uint8Array ? new TextDecoder().decode(topBid.price) : topBid.price;
               const bq = topBid.quantity instanceof Uint8Array ? new TextDecoder().decode(topBid.quantity) : topBid.quantity;
               const ap = topAsk.price instanceof Uint8Array ? new TextDecoder().decode(topAsk.price) : topAsk.price;
               const aq = topAsk.quantity instanceof Uint8Array ? new TextDecoder().decode(topAsk.quantity) : topAsk.quantity;
+
               log(`[BOOK][${decoded.symbol}] 🟢 Bid: ${bp} × ${bq} 🔴 Ask: ${ap} × ${aq}`);
+
             }
+else if (stream.includes('limit.depth.v3.api.pb')) {
+      // New: decode limit depth protobuf
+      try {
+ const decoded = window.$root.MEXCLimitDepthV3.decode(buffer);
+
+const firstSeq = decoded.first_sequence || 'N/A';
+const lastSeq = decoded.last_sequence || 'N/A';
+
+const html = `
+  <strong>Channel:</strong> ${decoded.channel}<br>
+  <strong>Symbol:</strong> ${decoded.symbol}<br>
+  <strong>Timestamp:</strong> ${decoded.timestamp}<br>
+  <strong>First Sequence:</strong> ${firstSeq}<br>
+  <strong>Last Sequence:</strong> ${lastSeq}<br>
+  <strong>Depths:</strong>
+  <ul>
+    ${decoded.depths.map(depth => {
+      let price = depth.price;
+      let quantity = depth.quantity;
+      if (price instanceof Uint8Array) price = new TextDecoder().decode(price);
+      if (quantity instanceof Uint8Array) quantity = new TextDecoder().decode(quantity);
+      return `<li>${price} → ${quantity}</li>`;
+    }).join('')}
+  </ul>
+`;
+
+$("#output").html(html);
+	}catch(e){
+		console.log(e);
+	}
+}
+ else if (stream.includes('100ms')) {
+              // Decode MEXCDeltaProtocolV3 message
+              try {
+                const decoded = window.$root.MEXCDeltaProtocolV3.decode(buffer);
+
+                const firstSeq = decoded.first_sequence || decoded.firstSequence || 'N/A';
+                const lastSeq = decoded.last_sequence || decoded.lastSequence || 'N/A';
+
+                const html = `
+                  <strong>Stream:</strong> ${decoded.stream}<br>
+                  <strong>Symbol:</strong> ${decoded.symbol}<br>
+                  <strong>Timestamp:</strong> ${decoded.timestamp}<br>
+                  <strong>First Sequence:</strong> ${firstSeq}<br>
+                  <strong>Last Sequence:</strong> ${lastSeq}<br>
+                  <strong>Depths:</strong>
+                  <ul>
+                    ${decoded.depths.map(depth => {
+                      const price = depth.price || '?';
+                      const qty = depth.quantity || '?';
+                      return `<li>${price} → ${qty}</li>`;
+                    }).join('')}
+                  </ul>
+                `;
+
+                $("#output").html(html);
+
+              } catch (err) {
+                $("#output").text("Error decoding: " + err.message);
+              }
+
+            } 
+
           } catch (err) {
             log('❌ Protobuf decode error: ' + err.message, 'error');
           }
         };
 
-        ws.onerror = err => log('❌ WebSocket error', 'error');
+        ws.onerror = (err) => log('❌ WebSocket error', 'error');
+
         ws.onclose = () => {
           log('🔌 Disconnected', 'status');
           $('#connectBtn').prop('disabled', false);

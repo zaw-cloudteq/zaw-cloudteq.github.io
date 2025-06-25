@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+
+message MEXCLimitDepthV3 {
+  string channel = 1;            // e.g. "spot@public.limit.depth.v3.api.pb"
+  string symbol = 3;             // e.g. "BTCUSDT"
+  int64 timestamp = 6;           // timestamp in milliseconds
+
+  repeated DepthEntry depths = 303; // list of price levels (buy and sell)
+
+  string first_sequence = 4;     // optional, sequence start (if available)
+  string last_sequence = 5;      // optional, sequence end (if available)
+}
+
+message DepthEntry {
+  string price = 1;              // price level
+  string quantity = 2;           // quantity at this price
+}

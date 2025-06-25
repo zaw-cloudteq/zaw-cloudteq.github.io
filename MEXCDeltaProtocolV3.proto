@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+message MEXCDeltaProtocolV3 {
+  string stream = 1;              // e.g. "spot@public.aggre.depth.v3.api.pb@100ms@BTCUSDT"
+  string symbol = 3;              // e.g. "BTCUSDT"
+  int64 timestamp = 6;            // e.g. 1750848656394
+  repeated DepthEntry depths = 313;  // repeated depth entries (field #313)
+  string channel = 27;            // e.g. "spot@public.aggre.depth.v3.api.pb@100ms"
+  string first_sequence = 4;      // e.g. "42533491503"
+  string last_sequence = 5;       // e.g. "42533491520"
+}
+
+message DepthEntry {
+  string price = 1;    // extracted from sub-object field #1 UTF8 string "107126.53" etc.
+  string quantity = 2; // extracted from sub-object field #2 UTF8 string "0" or "2.03268286" etc.
+}

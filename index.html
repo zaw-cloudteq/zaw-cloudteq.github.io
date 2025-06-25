@@ -68,7 +68,6 @@
           channel = `${stream}@${symbol}@1`;
         }*/
         ws = new WebSocket($("#url").text());
-        ws = new WebSocket();
         ws.binaryType = 'arraybuffer';
 
         ws.onopen = () => {

@@ -44,7 +44,7 @@
 
   <button id="connectBtn">Connect</button>
   <button id="disconnectBtn" disabled>Disconnect</button>
-
+  <span id="url">wss://wbs-api.mexc.com/ws</span>
   <div id="output">Status: Disconnected</div>
 
   <script>
@@ -67,7 +67,8 @@
         /*if(stream!="spot@public.limit.depth.v3.api.pb"){
           channel = `${stream}@${symbol}@1`;
         }*/
-        ws = new WebSocket('wss://wbs-api.mexc.com/ws');
+        //ws = new WebSocket($("#url").text());
+        ws = new WebSocket();
         ws.binaryType = 'arraybuffer';
 
         ws.onopen = () => {

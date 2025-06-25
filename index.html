@@ -67,7 +67,7 @@
         /*if(stream!="spot@public.limit.depth.v3.api.pb"){
           channel = `${stream}@${symbol}@1`;
         }*/
-        //ws = new WebSocket($("#url").text());
+        ws = new WebSocket($("#url").text());
         ws = new WebSocket();
         ws.binaryType = 'arraybuffer';
 

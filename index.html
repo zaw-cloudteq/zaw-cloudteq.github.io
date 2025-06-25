@@ -38,7 +38,7 @@
   <label>Stream: </label>
   <select id="streamType">
     <option value="spot@public.deals.v3.api.pb">Trades</option>
-    <option value="spot@public.limit.depth.v3.api.pb">Orderbook(Delta)</option>
+    <option value="spot@public.aggre.depth.v3.api.pb@100ms">Orderbook(Delta)</option>
   </select>
   <small>Orderbook Delta will send the snapshot at first, but subsequence data will be the delta</small>
 
@@ -64,9 +64,9 @@
         const symbol = $('#symbol').val().toUpperCase();
         const stream = $('#streamType').val();
         const channel = `${stream}@${symbol}`;
-        if(stream!="spot@public.limit.depth.v3.api.pb"){
+        /*if(stream!="spot@public.limit.depth.v3.api.pb"){
           channel = `${stream}@${symbol}@1`;
-        }
+        }*/
         ws = new WebSocket('wss://wbs.mexc.com/ws');
         ws.binaryType = 'arraybuffer';
 

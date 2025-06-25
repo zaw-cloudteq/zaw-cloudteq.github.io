@@ -67,7 +67,7 @@
         /*if(stream!="spot@public.limit.depth.v3.api.pb"){
           channel = `${stream}@${symbol}@1`;
         }*/
-        ws = new WebSocket('wss://wbs.mexc.com/ws');
+        ws = new WebSocket('wss://wbs-api.mexc.com/ws');
         ws.binaryType = 'arraybuffer';
 
         ws.onopen = () => {

@@ -63,7 +63,7 @@
 
         const symbol = $('#symbol').val().toUpperCase();
         const stream = $('#streamType').val();
-        const channel = `${stream}@${symbol}`;
+        const channel = `${stream}@${symbol}@1`;
         ws = new WebSocket('wss://wbs.mexc.com/ws');
         ws.binaryType = 'arraybuffer';
 

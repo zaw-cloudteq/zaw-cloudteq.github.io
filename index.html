@@ -63,7 +63,10 @@
 
         const symbol = $('#symbol').val().toUpperCase();
         const stream = $('#streamType').val();
-        const channel = `${stream}@${symbol}@1`;
+        const channel = `${stream}@${symbol}`;
+        if(stream!="spot@public.limit.depth.v3.api.pb"){
+          channel = `${stream}@${symbol}@1`;
+        }
         ws = new WebSocket('wss://wbs.mexc.com/ws');
         ws.binaryType = 'arraybuffer';
 
